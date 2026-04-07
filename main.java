@@ -1,87 +1,147 @@
-import java.util.*;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Scanner;
 
-class AddOnService {
-    private String serviceName;
-    private double cost;
-
-    public AddOnService(String serviceName, double cost) {
-        this.serviceName = serviceName;
-        this.cost = cost;
-    }
-
-    public String getServiceName() {
-        return serviceName;
-    }
-
-    public double getCost() {
-        return cost;
-    }
-
-    public String toString() {
-        return serviceName + " - ₹" + cost;
+class InvalidBookingException extends Exception {
+    public InvalidBookingException(String message) {
+        super(message);
     }
 }
 
-class AddOnServiceManager {
-    private Map<String, List<AddOnService>> reservationServices;
+class BookingInventory {
+    private final Map<String, Integer> roomAvailability;
 
-    public AddOnServiceManager() {
-        reservationServices = new HashMap<>();
+    public BookingInventory() {
+        roomAvailability = new LinkedHashMap<>();
+        roomAvailability.put("Single", 2);
+        roomAvailability.put("Double", 3);
+        roomAvailability.put("Suite", 1);
     }
 
-    public void addService(String reservationId, AddOnService service) {
-        reservationServices.putIfAbsent(reservationId, new ArrayList<>());
-        reservationServices.get(reservationId).add(service);
+    public boolean hasRoomType(String roomType) {
+        return roomAvailability.containsKey(roomType);
     }
 
-    public List<AddOnService> getServices(String reservationId) {
-        return reservationServices.getOrDefault(reservationId, new ArrayList<>());
+    public int getAvailableRooms(String roomType) {
+        Integer available = roomAvailability.get(roomType);
+        return available == null ? 0 : available;
     }
 
-    public double calculateTotalCost(String reservationId) {
-        double total = 0;
-        List<AddOnService> services = reservationServices.get(reservationId);
-        if (services != null) {
-            for (AddOnService s : services) {
-                total += s.getCost();
-            }
+    public void reserveRoom(String roomType) throws InvalidBookingException {
+        if (!hasRoomType(roomType)) {
+            throw new InvalidBookingException(
+                    "Invalid room type. Use exactly one of: Single, Double, Suite."
+            );
         }
-        return total;
+
+        int available = roomAvailability.get(roomType);
+        if (available <= 0) {
+            throw new InvalidBookingException("No rooms available for room type: " + roomType);
+        }
+
+        roomAvailability.put(roomType, available - 1);
+    }
+
+    public void displayInventory() {
+        System.out.println("\nCurrent Room Availability:");
+        for (Map.Entry<String, Integer> entry : roomAvailability.entrySet()) {
+            System.out.println(entry.getKey() + ": " + entry.getValue());
+        }
     }
 }
 
-public class UseCase7AddOnServiceSelection {
+class InvalidBookingValidator {
+    public void validateGuestName(String guestName) throws InvalidBookingException {
+        if (guestName == null || guestName.trim().isEmpty()) {
+            throw new InvalidBookingException("Guest name cannot be empty.");
+        }
+    }
+
+    public void validateRoomType(String roomType, BookingInventory inventory) throws InvalidBookingException {
+        if (roomType == null || roomType.trim().isEmpty()) {
+            throw new InvalidBookingException("Room type cannot be empty.");
+        }
+
+        if (!inventory.hasRoomType(roomType)) {
+            throw new InvalidBookingException(
+                    "Invalid room type. Use exactly one of: Single, Double, Suite."
+            );
+        }
+    }
+
+    public void validateNights(int nights) throws InvalidBookingException {
+        if (nights <= 0) {
+            throw new InvalidBookingException("Number of nights must be greater than 0.");
+        }
+    }
+}
+
+class BookingService {
+    private final InvalidBookingValidator validator;
+    private final BookingInventory inventory;
+
+    public BookingService(InvalidBookingValidator validator, BookingInventory inventory) {
+        this.validator = validator;
+        this.inventory = inventory;
+    }
+
+    public void processBooking(String guestName, String roomType, int nights) throws InvalidBookingException {
+        validator.validateGuestName(guestName);
+        validator.validateRoomType(roomType, inventory);
+        validator.validateNights(nights);
+
+        inventory.reserveRoom(roomType);
+
+        System.out.println("Booking confirmed for " + guestName
+                + ". Room Type: " + roomType
+                + ", Nights: " + nights);
+    }
+}
+
+class Main {
     public static void main(String[] args) {
-        Scanner sc = new Scanner(System.in);
-        AddOnServiceManager manager = new AddOnServiceManager();
+        Scanner scanner = new Scanner(System.in);
+        BookingInventory inventory = new BookingInventory();
+        InvalidBookingValidator validator = new InvalidBookingValidator();
+        BookingService bookingService = new BookingService(validator, inventory);
 
-        System.out.print("Enter Reservation ID: ");
-        String reservationId = sc.nextLine();
+        System.out.print("Enter number of booking requests: ");
+        int requestCount;
 
-        System.out.print("Enter number of add-on services: ");
-        int n = sc.nextInt();
-        sc.nextLine();
-
-        for (int i = 0; i < n; i++) {
-            System.out.print("Enter Service Name: ");
-            String name = sc.nextLine();
-
-            System.out.print("Enter Service Cost: ");
-            double cost = sc.nextDouble();
-            sc.nextLine();
-
-            AddOnService service = new AddOnService(name, cost);
-            manager.addService(reservationId, service);
+        try {
+            requestCount = Integer.parseInt(scanner.nextLine().trim());
+            if (requestCount <= 0) {
+                System.out.println("Failure: Number of booking requests must be greater than 0.");
+                return;
+            }
+        } catch (NumberFormatException exception) {
+            System.out.println("Failure: Enter a valid integer for number of booking requests.");
+            return;
         }
 
-        List<AddOnService> services = manager.getServices(reservationId);
+        for (int i = 1; i <= requestCount; i++) {
+            System.out.println("\nBooking Request " + i + ":");
 
-        System.out.println("\nSelected Services:");
-        for (AddOnService s : services) {
-            System.out.println(s);
+            try {
+                System.out.print("Enter guest name: ");
+                String guestName = scanner.nextLine();
+
+                System.out.print("Enter room type (Single/Double/Suite): ");
+                String roomType = scanner.nextLine();
+
+                System.out.print("Enter number of nights: ");
+                int nights = Integer.parseInt(scanner.nextLine().trim());
+
+                bookingService.processBooking(guestName, roomType, nights);
+            } catch (NumberFormatException exception) {
+                System.out.println("Failure: Number of nights must be a valid integer.");
+            } catch (InvalidBookingException exception) {
+                System.out.println("Failure: " + exception.getMessage());
+            }
+
+            inventory.displayInventory();
         }
 
-        double totalCost = manager.calculateTotalCost(reservationId);
-        System.out.println("Total Add-On Cost: ₹" + totalCost);
+        System.out.println("\nSystem remained stable after processing all booking requests.");
     }
 }
